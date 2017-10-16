@@ -23,28 +23,43 @@
  */
 package org.cactoos.scalar;
 
+import org.cactoos.BiFunc;
+import org.cactoos.BiProc;
 import org.cactoos.Func;
 import org.cactoos.Proc;
 import org.cactoos.Scalar;
-import org.cactoos.func.FuncOf;
+import org.cactoos.func.BiFuncOf;
 import org.cactoos.iterable.IterableOf;
 import org.cactoos.iterable.Mapped;
 
 /**
- * Logical disjunction.
+ * Logical conjunction, with index.
+ *
+ * <p>This class can be effectively used to iterate through
+ * a collection, just like
+ * {@link java.util.stream.Stream#forEach(java.util.function.Consumer)}
+ * works, but with an index provided for each item:</p>
+ *
+ * <pre> new And(
+ *   new IterableOf("Mary", "John", "William", "Napkin"),
+ *   new BiFuncOf<>(
+ *     (text, index) -> System.out.printf("Name #%d: %s\n", index, text),
+ *     true
+ *   )
+ * ).value();</pre>
  *
  * <p>There is no thread-safety guarantee.
  *
- * @author Vseslav Sekorin (vssekorin@gmail.com)
+ * @author Yegor Bugayenko (yegor256@gmail.com)
  * @version $Id$
- * @since 0.8
+ * @since 0.20
  */
-public final class Or implements Scalar<Boolean> {
+public final class AndWithIndex implements Scalar<Boolean> {
 
     /**
      * The iterator.
      */
-    private final Iterable<Scalar<Boolean>> origin;
+    private final Iterable<Func<Integer, Boolean>> iterable;
 
     /**
      * Ctor.
@@ -53,8 +68,8 @@ public final class Or implements Scalar<Boolean> {
      * @param <X> Type of items in the iterable
      */
     @SafeVarargs
-    public <X> Or(final Proc<X> proc, final X... src) {
-        this(new FuncOf<>(proc, false), src);
+    public <X> AndWithIndex(final Proc<X> proc, final X... src) {
+        this(new BiFuncOf<>(proc, true), src);
     }
 
     /**
@@ -64,7 +79,8 @@ public final class Or implements Scalar<Boolean> {
      * @param <X> Type of items in the iterable
      */
     @SafeVarargs
-    public <X> Or(final Func<X, Boolean> func, final X... src) {
+    public <X> AndWithIndex(final BiFunc<X, Integer, Boolean> func,
+        final X... src) {
         this(new IterableOf<>(src), func);
     }
 
@@ -74,8 +90,9 @@ public final class Or implements Scalar<Boolean> {
      * @param proc Proc to use
      * @param <X> Type of items in the iterable
      */
-    public <X> Or(final Iterable<X> src, final Proc<X> proc) {
-        this(src, new FuncOf<>(proc, false));
+    public <X> AndWithIndex(final Iterable<X> src,
+        final BiProc<X, Integer> proc) {
+        this(src, new BiFuncOf<>(proc, true));
     }
 
     /**
@@ -84,41 +101,46 @@ public final class Or implements Scalar<Boolean> {
      * @param func Func to map
      * @param <X> Type of items in the iterable
      */
-    public <X> Or(final Iterable<X> src, final Func<X, Boolean> func) {
+    public <X> AndWithIndex(final Iterable<X> src,
+        final BiFunc<X, Integer, Boolean> func) {
         this(
             new Mapped<>(
                 src,
-                item -> (Scalar<Boolean>) () -> func.apply(item)
+                item -> (Func<Integer, Boolean>) input
+                    -> func.apply(item, input)
             )
         );
     }
 
     /**
      * Ctor.
-     * @param scalar The Scalar.
+     * @param src The iterable
      */
     @SafeVarargs
-    public Or(final Scalar<Boolean>... scalar) {
-        this(new IterableOf<>(scalar));
+    public AndWithIndex(final Func<Integer, Boolean>... src) {
+        this(new IterableOf<>(src));
     }
 
     /**
      * Ctor.
-     * @param iterable The iterable.
+     * @param src The iterable
      */
-    public Or(final Iterable<Scalar<Boolean>> iterable) {
-        this.origin = iterable;
+    public AndWithIndex(final Iterable<Func<Integer, Boolean>> src) {
+        this.iterable = src;
     }
 
     @Override
     public Boolean value() throws Exception {
-        boolean result = false;
-        for (final Scalar<Boolean> item : this.origin) {
-            if (item.value()) {
-                result = true;
+        boolean result = true;
+        int pos = 0;
+        for (final Func<Integer, Boolean> item : this.iterable) {
+            if (!item.apply(pos)) {
+                result = false;
                 break;
             }
+            ++pos;
         }
         return result;
     }
+
 }
